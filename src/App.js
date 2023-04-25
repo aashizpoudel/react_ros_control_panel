@@ -5,7 +5,7 @@ import ROS from 'roslib'
 import { useEffect, useMemo, useRef, useState } from 'react';
 function App() {
   const [message, setMessage] = useState("")
-  const [hostname, setHostname] = useState('localhost');
+  const [hostname, setHostname] = useState('ws://localhost:9090');
   const [previewtopic, setPreviewtopic] = useState('')
   const previewValue = useMemo(
     () => Array.from(previewtopic).join(", "),
@@ -27,11 +27,11 @@ function App() {
     })
     setTopics(topics)
   }
-  useEffect(() => {
 
-    if (ros.current === null) {
-      ros.current = new ROS.Ros({ url: `ws:${hostname}:9090` })
-    }
+  function load_ros(){
+
+    ros.current = new ROS.Ros({ url: hostname })
+    
     // console.log(url)
 
     const ros_ = ros.current;
@@ -45,7 +45,14 @@ function App() {
     })
 
     ros_.getTopics(filterTopics);
-
+    // return ros_
+  }
+  useEffect(() => {
+    if (ros.current ===null){
+      load_ros()
+    }
+    
+    const ros_ = ros.current;
     // ros.connect();
     return () => {
       // console.log(url)
@@ -56,15 +63,11 @@ function App() {
 
 
   function connectFunction() {
-    const ros_ = ros.current;
-    console.log(ros_)
-    // ros_.connect()
-    if (!ros_.isConnected)
-      ros_.connect()
-    else {
-      ros_.getTopics(filterTopics);
-      setMessage("Already connected")
+    if(ros.current !==null){
+      ros.current.close();
     }
+
+    load_ros()
   }
 
 
@@ -104,7 +107,7 @@ function App() {
         <Container css={{ maxW: "900px" }}>
           <Row justify='start' align='start'>
             <Col align='center'>
-              <Card css={{ w: "80%" }}>
+              <Card css={{ w: "50%" }}>
                 <Card.Body>
                   <Row>
                     <img width={"100%"} src={logo} ref={imageRef} />
