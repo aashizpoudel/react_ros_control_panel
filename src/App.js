@@ -28,10 +28,10 @@ function App() {
     setTopics(topics)
   }
 
-  function load_ros(){
+  function load_ros() {
 
     ros.current = new ROS.Ros({ url: hostname })
-    
+
     // console.log(url)
 
     const ros_ = ros.current;
@@ -48,10 +48,10 @@ function App() {
     // return ros_
   }
   useEffect(() => {
-    if (ros.current ===null){
+    if (ros.current === null) {
       load_ros()
     }
-    
+
     const ros_ = ros.current;
     // ros.connect();
     return () => {
@@ -63,7 +63,7 @@ function App() {
 
 
   function connectFunction() {
-    if(ros.current !==null){
+    if (ros.current !== null) {
       ros.current.close();
     }
 
@@ -118,9 +118,9 @@ function App() {
           </Row>
 
           <Row css={{ paddingTop: "$10" }} justify="start" align="start">
-            <Col md align='center'><Input css={{mb:"$5"}} label="Host" value={hostname} onChange={function (e) { setHostname(e.target.value) }} /> <Button onPress={connectFunction}>Re-Connect</Button> <Text p>{message}</Text></Col>
+            <Col md align='center'><Input css={{ mb: "$5" }} label="Host" value={hostname} onChange={function (e) { setHostname(e.target.value) }} /> <Button onPress={connectFunction}>Re-Connect</Button> <Text p>{message}</Text></Col>
             <Col md align='center'><Dropdown>
-              <Dropdown.Button flat color="secondary" css={{mb:"$5"}}>
+              <Dropdown.Button flat color="secondary" css={{ mb: "$5" }}>
                 {previewValue}
               </Dropdown.Button>
               <Dropdown.Menu
@@ -141,7 +141,7 @@ function App() {
 
             <Col md align='center'>
               <Dropdown>
-                <Dropdown.Button flat color="secondary" css={{mb:"$5"}}>
+                <Dropdown.Button flat color="secondary" css={{ mb: "$5" }}>
                   {captureValue}
                 </Dropdown.Button>
                 <Dropdown.Menu
