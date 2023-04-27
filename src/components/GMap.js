@@ -53,7 +53,7 @@ function GMap() {
     const [points, setPoints] = useState([]);
     const [center, setCenter] = useState({ lat: 37.54, lng: -80.39 });
     const [isCollectingPoints, setIsCollectingPoints] = useState(false);
-
+    const [selectedWaypoint, setSelectedWaypoint] = useState(null);
     const [waypoints, setWaypoints] = useState([]);
     const [robotPose, setRobotPose] = useState(null);
     const mapRef = useRef();
@@ -155,7 +155,7 @@ function GMap() {
         var { map, maps } = mapRef.current;
         const ros = rosRef.current;
         // console.log(ros)
-        if (ros) {
+        if (ros && ros.isConnected) {
             const listener = getListener(ros)
 
             listener.subscribe(function (message) {
@@ -183,6 +183,23 @@ function GMap() {
     }
 
 
+    const actionSendWaypointToRobot = () => {
+        if (selectedWaypoint === undefined){
+            return
+        }
+        const waypoint = waypoints[selectedWaypoint];
+        const ros = rosRef.current;
+        if (ros && ros.isConnected) {
+            const listener = ROSLIB.Topic({
+                ros: ros,
+                name: '/waypoint',
+                messageType: 'react_ros_control/Waypoint'
+            })
+            listener.publish({message: waypoint})
+        }
+    
+     };
+
     return <Container>
         <Grid.Container>
             <Grid xs={3}>
@@ -207,12 +224,13 @@ function GMap() {
                         <Text h1>Waypoints</Text>
                         <Grid>
                             {waypoints.map((waypoint, index) => (
-                                <Collapse title={`Waypoint ${index + 1}`} key={index} subtitle={<Text>{waypoint.length} points. <Link onClick={(evt) => { evt.preventDefault(); actionSeeOnMap(index) }} href="#">See on map </Link></Text>}><Text>{JSON.stringify(waypoint)}</Text></Collapse>
+                                <Collapse title={`Waypoint ${index + 1}`} key={index} subtitle={<Text>{waypoint.length} points. <Link onClick={(evt) => { evt.preventDefault(); setSelectedWaypoint(index); actionSeeOnMap(index) }} href="#">See on map </Link></Text>}><Text>{JSON.stringify(waypoint)}</Text></Collapse>
 
                             ))}
                         </Grid>
                     </div>
                     {asSeenOnMap.current.length > 0 && <Button onPress={clearMap}>Clear Map</Button>}
+                    <Button onPress={actionSendWaypointToRobot}>Send waypoint to robot</Button>
                 </div>
 
 
