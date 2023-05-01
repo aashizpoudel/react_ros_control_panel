@@ -3,6 +3,7 @@ import './App.css';
 import { Button, Card, Col, Container, Dropdown, Input, NextUIProvider, Row, Text } from '@nextui-org/react';
 import ROS from 'roslib'
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 function App() {
   const [message, setMessage] = useState("")
   const [hostname, setHostname] = useState('ws://localhost:9090');
@@ -118,7 +119,12 @@ function App() {
           </Row>
 
           <Row css={{ paddingTop: "$10" }} justify="start" align="start">
-            <Col md align='center'><Input css={{ mb: "$5" }} label="Host" value={hostname} onChange={function (e) { setHostname(e.target.value) }} /> <Button onPress={connectFunction}>Re-Connect</Button> <Text p>{message}</Text></Col>
+            <Col md align='center'>
+              <Input css={{ mb: "$5" }} label="Host" value={hostname} onChange={function (e) { setHostname(e.target.value) }} />
+              <Button onPress={connectFunction}>Re-Connect</Button> <Text p>{message}</Text>
+
+              <Link target='_blank' to="/map"><Button css={{ my: "$5" }}>Map Based Navigation</Button></Link>
+            </Col>
             <Col md align='center'><Dropdown>
               <Dropdown.Button flat color="secondary" css={{ mb: "$5" }}>
                 {previewValue}

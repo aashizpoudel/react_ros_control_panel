@@ -1,9 +1,10 @@
-import { Button, Collapse, Container, Grid, Link, StyledButtonGroup, Text } from "@nextui-org/react";
+import { Button, Card, Collapse, Container, Grid, Link, StyledButtonGroup, Switch, Text } from "@nextui-org/react";
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import ROSLIB from 'roslib'
 import RosConnection from "./ros_connection";
 import 'mapbox-gl/dist/mapbox-gl.css';
 import Map, { Layer, Marker, NavigationControl, Source } from 'react-map-gl';
+import { act } from "react-dom/test-utils";
 
 
 
@@ -46,6 +47,11 @@ function GMap() {
             newPoints.pop();
             setPoints(newPoints);
         }
+    }
+
+    const actionCancel = () => {
+        setPoints([]);
+        setIsCollectingPoints(false);
     }
 
     const actionFinishAndSave = () => {
@@ -114,6 +120,14 @@ function GMap() {
         }
     }
 
+    const actionToggleTrackingRobot = (evt) => {
+        if (trackingRobot) {
+            stopTracking();
+        } else {
+            trackRobot();
+        }
+    }
+
     const stopTracking = () => {
         const ros = rosRef.current;
         const listener = getListener(ros);
@@ -153,18 +167,36 @@ function GMap() {
         return geojson
     }, [selectedWaypoint]);
 
-    // const robotPoseHistoryData = useMemo(() => {
-    //     const geojson = {
-    //         type: "LineString",
-    //         coordinates: robotPoseHistory.map((point) => [point.longitude, point.latitude])
-    //     }
-    //     console.log(geojson)
-    //     return geojson
-    // }, [robotPoseHistory]);
 
+    const actionseeOnMap = (waypoint) => {
+        setSelectedWaypoint(waypoint); onCenterChange({
+            longitude: waypoint[0].longitude, latitude: waypoint[0].latitude
+        })
+    }
+
+    const actionDeleteWaypoint = (index) => {
+        const newWaypoints = [...waypoints];
+        var popped = newWaypoints.splice(index, 1);
+        if (popped.length > 0) {
+            popped = popped[0];
+            if (selectedWaypoint === popped) {
+                setSelectedWaypoint([])
+            }
+
+            setWaypoints(newWaypoints);
+        }
+    }
+
+    const actionClearSelection = () => {
+        setSelectedWaypoint([])
+    }
 
     const actionSendWaypointToRobot = () => {
         if (selectedWaypoint === undefined) {
+            return
+        }
+
+        if (selectedWaypoint.length === 0) {
             return
         }
 
@@ -172,25 +204,15 @@ function GMap() {
         const waypoint = selectedWaypoint;
         const ros = rosRef.current;
         if (ros && ros.isConnected) {
-            const listener = new ROSLIB.Topic({
-                ros: ros,
-                name: '/gps_waypoint/goal',
-                messageType: 'gps_based_navigation/GoToWaypointActionGoal'
-            })
-            console.log(listener)
-            var messages = waypoint.map((point, index) => {
-                return new ROSLIB.Message(point)
+
+            var messages = waypoint.map((point) => {
+                return new ROSLIB.Message({ lat: point.latitude, lng: point.longitude })
             })
 
-            const msg = new ROSLIB.Message({
-                goal: { points: messages }
-            })
-            // listener.publish(msg)
-            // const goal = new ROSLIB.Message({
-            console.log("Sent waypoint to robot.")
+            console.log("Sending waypoint to robot.")
             const fibonacciClient = new ROSLIB.ActionClient({
                 ros: ros,
-                serverName: 'gps_waypoint',
+                serverName: 'gps_based_navigation/gps_waypoint',
                 actionName: 'gps_based_navigation/GoToWaypointAction'
             });
             // console.log(waypoint);
@@ -205,6 +227,7 @@ function GMap() {
                 console.log(er)
             })
 
+            console.log(goal, fibonacciClient)
             goal.on('feedback', function (feedback) {
                 console.log('Feedback: ' + feedback.sequence);
             });
@@ -217,124 +240,118 @@ function GMap() {
 
     };
 
-    return <Container>
-        <Grid.Container>
-            <Grid xs={3}>
-                <div>
-                    <div>
-                        <Text h1>Controls</Text>
-                        <RosConnection ref={rosRef} onRosConnected={onRosConnected} />
-                    </div>
-                    <div>
-                        <Text h3>Actions</Text>
-                        <hr />
-                    </div>
-                    <div>
-                        <Button onPress={actionCreateNewWaypoint}>Create new waypoint</Button>
-                        <div>
-                            <Button onPress={actionUndo}>Undo</Button>
-                            <Button onPress={actionFinishAndSave}>Finish and Save</Button>
-                            <Button onPress={trackRobot}>Track Robot</Button>
-                            <Button onPress={stopTracking}>Stop Tracking</Button>
-                        </div>
-                    </div>
-                    <div>
-                        <Text h1>Waypoints</Text>
-                        <Grid>
-                            {waypoints.map((waypoint, index) => (
-                                <Collapse title={`Waypoint ${index + 1}`} key={index} subtitle={<Text>{waypoint.length} points. <Link onClick={(evt) => { evt.preventDefault(); setSelectedWaypoint(waypoint); onCenterChange({ longitude: waypoint[0].longitude, latitude: waypoint[0].latitude }); }} href="#">See on map </Link></Text>}><Text>{JSON.stringify(waypoint)}</Text></Collapse>
+    return <Container css={{ position: "relative", p: 0 }}>
+        <Map
+            mapboxAccessToken={process.env.REACT_APP_MAPBOX_API_KEY}
+            style={{ width: "100%", height: "100vh" }}
+            mapStyle="mapbox://styles/mapbox/satellite-streets-v12"
+            ref={mapRef}
+            // onLoaded={handleApiLoaded}
+            onLoad={() => {
+                if (robotPose)
+                    onCenterChange(robotPose)
+            }}
+            initialViewState={{
+                latitude: center.latitude,
+                longitude: center.longitude,
+                zoom: 20,
+            }}
+            cursor={isCollectingPoints ? "crosshair" : "default"}
+            onClick={handleMapClick}
+        >
 
-                            ))}
-                        </Grid>
-                    </div>
-                    <Button onPress={actionSendWaypointToRobot}>Send waypoint to robot</Button>
-                </div>
+            <Source id="polylineLayer" type="geojson" data={waypointData}>
+                <Layer
+                    id="lineLayer"
+                    type="line"
 
-
-            </Grid>
-
-            <Grid xs={9} css={{ height: "100vh" }}>
-                <Map
-                    mapboxAccessToken={process.env.REACT_APP_MAPBOX_API_KEY}
-                    style={{ width: "100%", height: "100vh" }}
-                    mapStyle="mapbox://styles/mapbox/satellite-streets-v12"
-                    ref={mapRef}
-                    // onLoaded={handleApiLoaded}
-                    onLoad={() => {
-                        if (robotPose)
-                            onCenterChange(robotPose)
+                    layout={{
+                        "line-join": "round",
+                        "line-cap": "round"
                     }}
-                    initialViewState={{
-                        latitude: center.latitude,
-                        longitude: center.longitude,
-                        zoom: 20,
+                    paint={{
+                        "line-color": "rgba(3, 170, 238, 0.5)",
+                        "line-width": 5
                     }}
-                    cursor={isCollectingPoints ? "crosshair" : "default"}
-                    onClick={handleMapClick}
-                    style={{ width: "100%", height: "100vh" }}
-                >
-
-                    <Source id="polylineLayer" type="geojson" data={waypointData}>
-                        <Layer
-                            id="lineLayer"
-                            type="line"
-
-                            layout={{
-                                "line-join": "round",
-                                "line-cap": "round"
-                            }}
-                            paint={{
-                                "line-color": "rgba(3, 170, 238, 0.5)",
-                                "line-width": 5
-                            }}
-                        />
-                    </Source>
+                />
+            </Source>
 
 
 
 
-                    {robotPose && <Marker
-                        longitude={robotPose.longitude}
-                        latitude={robotPose.latitude}
-                        anchor="center"
-                        color="red"
-                    />}
-                    {selectedWaypoint.map((point, index) => (
-                        <Marker
-                            key={`marker-${index}`}
-                            longitude={point.longitude}
-                            latitude={point.latitude}
-                            anchor="center"
-                            onClick={e => {
-                                // If we let the click event propagates to the map, it will immediately close the popup
-                                // with `closeOnClick: true`
-                                e.originalEvent.stopPropagation();
+            {robotPose && <Marker
+                longitude={robotPose.longitude}
+                latitude={robotPose.latitude}
+                anchor="center"
+                color="red"
+            />}
+            {selectedWaypoint.map((point, index) => (
+                <Marker
+                    key={`marker-${index}`}
+                    longitude={point.longitude}
+                    latitude={point.latitude}
+                    anchor="center"
+                    onClick={e => {
+                        // If we let the click event propagates to the map, it will immediately close the popup
+                        // with `closeOnClick: true`
+                        e.originalEvent.stopPropagation();
 
-                            }}
-                        />
-                    ))}
+                    }}
+                />
+            ))}
 
-                    {points.map((point, index) => (
-                        <Marker
-                            key={`marker-${index}`}
-                            longitude={point.longitude}
-                            latitude={point.latitude}
-                            anchor="center"
-                            onClick={e => {
-                                // If we let the click event propagates to the map, it will immediately close the popup
-                                // with `closeOnClick: true`
-                                e.originalEvent.stopPropagation();
-                                var poi = points;
-                                poi.splice(index, 1);
-                                setPoints(poi);
-                            }}
-                        />
-                    ))}
+            {points.map((point, index) => (
+                <Marker
+                    key={`marker-${index}`}
+                    longitude={point.longitude}
+                    latitude={point.latitude}
+                    anchor="center"
+                    onClick={e => {
+                        // If we let the click event propagates to the map, it will immediately close the popup
+                        // with `closeOnClick: true`
+                        e.originalEvent.stopPropagation();
+                        var poi = points;
+                        poi.splice(index, 1);
+                        setPoints(poi);
+                    }}
+                />
+            ))}
 
-                </Map>
+        </Map>
 
-            </Grid>
-        </Grid.Container>
+
+
+        <Card css={{ position: "absolute", top: 0, left: 0, zIndex: "999", w: "25%", p: 8, m: 2, borderRadius: 4 }}>
+            <RosConnection ref={rosRef} onRosConnected={onRosConnected} />
+            {rosRef.current && rosRef.current.isConnected && <div style={{ display: "flex", flexDirection: "row", justifyContent: "start", alignContent: "center", alignItems: "center" }}>
+                <p>Track Robot</p><Switch css={{ mx: 9, size: "sm" }} checked={trackingRobot} onChange={actionToggleTrackingRobot} />
+            </div>}
+        </Card>
+
+        <Card css={{ position: "absolute", top: 0, right: 0, zIndex: "999", w: "20%", p: 10, m: 4, borderRadius: 4 }}>
+            {!isCollectingPoints && <Button onPress={actionCreateNewWaypoint}>Create new waypoint</Button>}
+            {isCollectingPoints && <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", margin: "10px" }}>
+                <Button size={"xs"} color={"warning"} onPress={actionUndo}>Undo</Button>
+                <Button size={"xs"} onPress={actionFinishAndSave}>Finish</Button>
+                <Button size={"xs"} color={"error"} onPress={actionCancel}>Cancel</Button>
+            </div>}
+            <div style={{ display: "flex", flexDirection: "column", margin: "10px" }}>
+                {waypoints.map((waypoint, index) => (
+                    <Collapse title={`Waypoint ${index + 1}`} key={index}
+                        subtitle={<div style={{ paddingTop: "5px", display: "flex", flexDirection: "column" }}>
+                            <Text p>{waypoint.length} points.</Text>
+                            <div style={{ display: "flex", flexDirection: "row", justifyContent: "start", marginTop: "5px" }}><Button size="xs" color={"info"}
+                                onClick={() => { actionseeOnMap(waypoint) }} icon={<box-icon color="green" name="show"></box-icon>} />
+                                <Button css={{ mx: "$2" }} size="xs" color={"info"} onClick={() => { actionDeleteWaypoint(index) }} icon={<box-icon color="red" name="trash-alt"></box-icon>} />
+                            </div>
+                        </div>}><Text>{JSON.stringify(waypoint)}</Text></Collapse>
+                ))}
+            </div>
+            {selectedWaypoint.length > 0 && <div style={{ display: "flex", flexDirection: "column" }}><Button size={"sm"} onPress={actionSendWaypointToRobot}>Send waypoint to robot</Button>
+                <Button css={{ my: "$2" }} size={"sm"} onPress={actionClearSelection}>Clear Selection</Button></div>}
+
+        </Card>
+
     </Container >
 }
 
