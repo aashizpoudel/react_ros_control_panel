@@ -1,69 +1,40 @@
 import { Button, Collapse, Container, Grid, Link, StyledButtonGroup, Text } from "@nextui-org/react";
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import ROSLIB from 'roslib'
-import GoogleMapReact from 'google-map-react'
 import RosConnection from "./ros_connection";
-const APIKEY = process.env.REACT_APP_GOOGLE_MAP_API_KEY;
+import 'mapbox-gl/dist/mapbox-gl.css';
+import Map, { Layer, Marker, NavigationControl, Source } from 'react-map-gl';
 
 
 
-const K_WIDTH = 0;
-const K_HEIGHT = 0;
-
-const MarkerStyle = {
-    // initially any map object has left top corner at lat lng coordinates
-    // it's on you to set object origin to 0,0 coordinates
-    position: 'absolute',
-    width: K_WIDTH,
-    height: K_HEIGHT,
-    borderLeft: "4px solid transparent",
-    borderRight: "4px solid transparent",
-    borderTop: "8px solid #555",
-};
+// const APIKEY = process.env.REACT_APP_MAPBOX_API_KEY;
 
 
+// mapboxgl.accessToken = APIKEY;
 
 
-
-const Marker = ({ text }) => <div style={MarkerStyle}>{text}</div>;
-
-
-function GoogleMap({ apiKey, center, zoom, handleMapClick, points, handleApiLoaded }) {
-
-
-    return <GoogleMapReact
-        onGoogleApiLoaded={handleApiLoaded}
-        onClick={handleMapClick}
-        bootstrapURLKeys={{ key: apiKey }}
-        center={center}
-        defaultZoom={zoom}
-        yesIWantToUseGoogleMapApiInternals
-    //    onGoogleApiLoaded={({ map, maps }) => handleApiLoaded(map, maps)}
-    >
-        <Marker lat={center.lat} lng={center.lng} text={"c"} />
-        {points.map((point, index) => (
-            <Marker lat={point.lat} lng={point.lng} text={index + 1} key={index} />))}
-    </GoogleMapReact>
-}
 
 
 
 function GMap() {
 
     const [points, setPoints] = useState([]);
-    const [center, setCenter] = useState({ lat: 37.54, lng: -80.39 });
+    const center = { latitude: 37.227857, longitude: -80.4193 };
     const [isCollectingPoints, setIsCollectingPoints] = useState(false);
-    const [selectedWaypoint, setSelectedWaypoint] = useState(null);
+    const [selectedWaypoint, setSelectedWaypoint] = useState([]);
     const [waypoints, setWaypoints] = useState([]);
-    const [robotPose, setRobotPose] = useState(null);
+    const [robotPose, setRobotPose] = useState();
+    const [robotPoseHistory, setRobotPoseHistory] = useState([]);
+    const [trackingRobot, setTrackingRobot] = useState(false);
+    const [robotPoseHistoryData, setRobotPoseHistoryData] = useState({});
     const mapRef = useRef();
     const rosRef = useRef();
     const handleMapClick = (event) => {
         // console.log(event)
         if (isCollectingPoints) {
-            const { lat, lng } = event;
+            const { lat, lng } = event.lngLat;
             // console.log(lat)
-            const newPoints = [...points, { lat, lng }];
+            const newPoints = [...points, { latitude: lat, longitude: lng }];
             setPoints(newPoints);
         }
     };
@@ -88,117 +59,163 @@ function GMap() {
     }
 
     const actionCreateNewWaypoint = () => {
+        setSelectedWaypoint([])
         setIsCollectingPoints(true);
         setPoints([]);
     }
-    const asSeenOnMap = useRef([]);
-    const actionSeeOnMap = (index) => {
 
-        if (asSeenOnMap.current.length > 0) {
-            asSeenOnMap.current.map((item) => item.setMap(null))
-            asSeenOnMap.current = [];
-        }
-
-        const waypoint = waypoints[index];
-        const { map, maps } = mapRef.current;
-        // console.log(maps)
-        const lines = new maps.Polyline({
-            path: waypoint,
-            geodesic: true,
-            strokeColor: "#FF0000",
-            strokeOpacity: 1.0,
-            strokeWeight: 1,
-        });
-
-        waypoint.map((point, index) => {
-            var marker = new maps.Marker({
-                position: point,
-            })
-            marker.setMap(map)
-            asSeenOnMap.current.push(marker)
-        })
-
-        lines.setMap(map)
-        asSeenOnMap.current.push(lines)
-    }
 
     function getListener(ros) {
         var ne = new ROSLIB.Topic({
             ros: ros,
-            name: '/gps/filtered',
+            name: '/gps_based_navigation/gps/filtered',
             messageType: 'sensor_msgs/NavSatFix'
         });
         return ne;
     }
 
 
-    const handleApiLoaded = (map) => {
-        mapRef.current = map;
-        var { map, maps } = mapRef.current;
-        const ros = rosRef.current;
-        // console.log(ros)
-        if (ros) {
-            const centerListener = getListener(ros)
 
-            centerListener.subscribe(function (message) {
-                console.log(message.latitude);
-                setCenter({ lat: message.latitude, lng: message.longitude })
-                centerListener.unsubscribe();
-            });
+    const threshold = 1e-6;
 
-
-        }
+    const updateRobotPoseHistory = (pose) => {
+        setRobotPose(pose)
+        var r = robotPoseHistory;
+        r.push(pose)
+        // console.log(r)
+        setRobotPoseHistory(r)
     }
+
 
     const trackRobot = () => {
         // mapRef.current = map;
-        var { map, maps } = mapRef.current;
         const ros = rosRef.current;
+        setTrackingRobot(true);
         // console.log(ros)
         if (ros && ros.isConnected) {
             const listener = getListener(ros)
+            var lastPose = center;
 
-            listener.subscribe(function (message) {
-                console.log(message);
-                setRobotPose({ lat: message.latitude, lng: message.longitude })
-                console.log(robotPose)
-                listener.unsubscribe();
-                var cityCircle = new maps.Circle({
-                    strokeColor: "#FF0000",
-                    strokeOpacity: 0.8,
-                    strokeWeight: 2,
-                    fillColor: "#FF0000",
-                    fillOpacity: 0.35,
-                    center: robotPose,
-                    radius: 1,
-                });
-                cityCircle.setMap(map);
+            listener.subscribe((message) => {
+                // console.log(message);
+                var pose = { latitude: message.latitude, longitude: message.longitude }
+
+                var del = { latitude: Math.abs(pose.latitude - lastPose.latitude), longitude: Math.abs(pose.longitude - lastPose.longitude) }
+                if (del.latitude < threshold && del.longitude < threshold) {
+                    return;
+                }
+
+                updateRobotPoseHistory(pose)
+
+                lastPose = pose;
+                // console.log(robotPoseHistoryData)
+
             });
         }
     }
 
-    const clearMap = () => {
-        asSeenOnMap.current.map((item) => item.setMap(null))
-        asSeenOnMap.current = [];
+    const stopTracking = () => {
+        const ros = rosRef.current;
+        const listener = getListener(ros);
+        listener.unsubscribe();
     }
 
 
-    const actionSendWaypointToRobot = () => {
-        if (selectedWaypoint === undefined){
-            return
-        }
-        const waypoint = waypoints[selectedWaypoint];
+    const onRosConnected = () => {
         const ros = rosRef.current;
         if (ros && ros.isConnected) {
-            const listener = ROSLIB.Topic({
-                ros: ros,
-                name: '/waypoint',
-                messageType: 'react_ros_control/Waypoint'
-            })
-            listener.publish({message: waypoint})
+            console.log("ROS Connected")
+            const centerListener = getListener(ros)
+
+            centerListener.subscribe(function (message) {
+                console.log(message);
+                // setCenter({ latitude: message.latitude, longitude: message.longitude })
+                onCenterChange({ latitude: message.latitude, longitude: message.longitude })
+                setRobotPose({ latitude: message.latitude, longitude: message.longitude });
+                centerListener.unsubscribe();
+            });
         }
-    
-     };
+
+    }
+
+
+    const onCenterChange = ({ longitude, latitude }) => {
+        mapRef.current?.flyTo({ center: [longitude, latitude], duration: 1000 });
+    };
+
+
+    const waypointData = useMemo(() => {
+        const geojson = {
+            type: "LineString",
+            coordinates: selectedWaypoint.map((point) => ([point.longitude, point.latitude]))
+        }
+        // console.log(geojson)
+        return geojson
+    }, [selectedWaypoint]);
+
+    // const robotPoseHistoryData = useMemo(() => {
+    //     const geojson = {
+    //         type: "LineString",
+    //         coordinates: robotPoseHistory.map((point) => [point.longitude, point.latitude])
+    //     }
+    //     console.log(geojson)
+    //     return geojson
+    // }, [robotPoseHistory]);
+
+
+    const actionSendWaypointToRobot = () => {
+        if (selectedWaypoint === undefined) {
+            return
+        }
+
+
+        const waypoint = selectedWaypoint;
+        const ros = rosRef.current;
+        if (ros && ros.isConnected) {
+            const listener = new ROSLIB.Topic({
+                ros: ros,
+                name: '/gps_waypoint/goal',
+                messageType: 'gps_based_navigation/GoToWaypointActionGoal'
+            })
+            console.log(listener)
+            var messages = waypoint.map((point, index) => {
+                return new ROSLIB.Message(point)
+            })
+
+            const msg = new ROSLIB.Message({
+                goal: { points: messages }
+            })
+            // listener.publish(msg)
+            // const goal = new ROSLIB.Message({
+            console.log("Sent waypoint to robot.")
+            const fibonacciClient = new ROSLIB.ActionClient({
+                ros: ros,
+                serverName: 'gps_waypoint',
+                actionName: 'gps_based_navigation/GoToWaypointAction'
+            });
+            // console.log(waypoint);
+            var goal = new ROSLIB.Goal({
+                actionClient: fibonacciClient,
+                goalMessage: {
+                    points: messages
+                }
+            });
+
+            goal.on("error", function (er) {
+                console.log(er)
+            })
+
+            goal.on('feedback', function (feedback) {
+                console.log('Feedback: ' + feedback.sequence);
+            });
+
+            goal.on('result', function (result) {
+                console.log('Final Result: ' + result.result);
+            });
+            goal.send()
+        }
+
+    };
 
     return <Container>
         <Grid.Container>
@@ -206,7 +223,7 @@ function GMap() {
                 <div>
                     <div>
                         <Text h1>Controls</Text>
-                        <RosConnection ref={rosRef} />
+                        <RosConnection ref={rosRef} onRosConnected={onRosConnected} />
                     </div>
                     <div>
                         <Text h3>Actions</Text>
@@ -218,25 +235,104 @@ function GMap() {
                             <Button onPress={actionUndo}>Undo</Button>
                             <Button onPress={actionFinishAndSave}>Finish and Save</Button>
                             <Button onPress={trackRobot}>Track Robot</Button>
+                            <Button onPress={stopTracking}>Stop Tracking</Button>
                         </div>
                     </div>
                     <div>
                         <Text h1>Waypoints</Text>
                         <Grid>
                             {waypoints.map((waypoint, index) => (
-                                <Collapse title={`Waypoint ${index + 1}`} key={index} subtitle={<Text>{waypoint.length} points. <Link onClick={(evt) => { evt.preventDefault(); setSelectedWaypoint(index); actionSeeOnMap(index) }} href="#">See on map </Link></Text>}><Text>{JSON.stringify(waypoint)}</Text></Collapse>
+                                <Collapse title={`Waypoint ${index + 1}`} key={index} subtitle={<Text>{waypoint.length} points. <Link onClick={(evt) => { evt.preventDefault(); setSelectedWaypoint(waypoint); onCenterChange({ longitude: waypoint[0].longitude, latitude: waypoint[0].latitude }); }} href="#">See on map </Link></Text>}><Text>{JSON.stringify(waypoint)}</Text></Collapse>
 
                             ))}
                         </Grid>
                     </div>
-                    {asSeenOnMap.current.length > 0 && <Button onPress={clearMap}>Clear Map</Button>}
                     <Button onPress={actionSendWaypointToRobot}>Send waypoint to robot</Button>
                 </div>
 
 
             </Grid>
+
             <Grid xs={9} css={{ height: "100vh" }}>
-                <GoogleMap handleApiLoaded={handleApiLoaded} points={points} handleMapClick={handleMapClick} apiKey={APIKEY} center={center} zoom={16} />
+                <Map
+                    mapboxAccessToken={process.env.REACT_APP_MAPBOX_API_KEY}
+                    style={{ width: "100%", height: "100vh" }}
+                    mapStyle="mapbox://styles/mapbox/satellite-streets-v12"
+                    ref={mapRef}
+                    // onLoaded={handleApiLoaded}
+                    onLoad={() => {
+                        if (robotPose)
+                            onCenterChange(robotPose)
+                    }}
+                    initialViewState={{
+                        latitude: center.latitude,
+                        longitude: center.longitude,
+                        zoom: 20,
+                    }}
+                    cursor={isCollectingPoints ? "crosshair" : "default"}
+                    onClick={handleMapClick}
+                    style={{ width: "100%", height: "100vh" }}
+                >
+
+                    <Source id="polylineLayer" type="geojson" data={waypointData}>
+                        <Layer
+                            id="lineLayer"
+                            type="line"
+
+                            layout={{
+                                "line-join": "round",
+                                "line-cap": "round"
+                            }}
+                            paint={{
+                                "line-color": "rgba(3, 170, 238, 0.5)",
+                                "line-width": 5
+                            }}
+                        />
+                    </Source>
+
+
+
+
+                    {robotPose && <Marker
+                        longitude={robotPose.longitude}
+                        latitude={robotPose.latitude}
+                        anchor="center"
+                        color="red"
+                    />}
+                    {selectedWaypoint.map((point, index) => (
+                        <Marker
+                            key={`marker-${index}`}
+                            longitude={point.longitude}
+                            latitude={point.latitude}
+                            anchor="center"
+                            onClick={e => {
+                                // If we let the click event propagates to the map, it will immediately close the popup
+                                // with `closeOnClick: true`
+                                e.originalEvent.stopPropagation();
+
+                            }}
+                        />
+                    ))}
+
+                    {points.map((point, index) => (
+                        <Marker
+                            key={`marker-${index}`}
+                            longitude={point.longitude}
+                            latitude={point.latitude}
+                            anchor="center"
+                            onClick={e => {
+                                // If we let the click event propagates to the map, it will immediately close the popup
+                                // with `closeOnClick: true`
+                                e.originalEvent.stopPropagation();
+                                var poi = points;
+                                poi.splice(index, 1);
+                                setPoints(poi);
+                            }}
+                        />
+                    ))}
+
+                </Map>
+
             </Grid>
         </Grid.Container>
     </Container >

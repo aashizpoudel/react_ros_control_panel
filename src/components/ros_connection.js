@@ -3,6 +3,7 @@ import ROS from 'roslib'
 import { forwardRef, useEffect, useRef, useState } from 'react';
 const RosConnection = forwardRef((props, ref) => {
     const [message, setMessage] = useState("")
+    const { onRosConnected } = props;
     const [hostname, setHostname] = useState('ws://localhost:9090');
     const ros = ref;
 
@@ -16,6 +17,7 @@ const RosConnection = forwardRef((props, ref) => {
         const ros_ = ros.current;
         ros_.on('connection', function () {
             setMessage("connected...")
+            onRosConnected()
         })
 
         ros_.on("error", function (error) {
