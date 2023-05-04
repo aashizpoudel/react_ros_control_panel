@@ -5,17 +5,17 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import GMap from './components/GMap';
 import {
-  createBrowserRouter,
+  createHashRouter,
   RouterProvider,
 } from "react-router-dom";
 import "./index.css";
 
-const router = createBrowserRouter([
+const router = createHashRouter([
   {
     path: "/",
-    element: <App/>,
+    element: <App />,
   },
-  { path: "/map", element: <GMap/> },
+  { path: "/map", element: <GMap /> },
   { path: "*", element: <h1>404</h1> }
 ]);
 
@@ -23,9 +23,9 @@ const router = createBrowserRouter([
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
-  
-    <RouterProvider router={router} />
- 
+
+  <RouterProvider router={router} />
+
 );
 
 // write a component which adds browser router to the app 
