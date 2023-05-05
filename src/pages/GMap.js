@@ -1,10 +1,9 @@
 import { Button, Card, Collapse, Container, Grid, Link, StyledButtonGroup, Switch, Text } from "@nextui-org/react";
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import ROSLIB from 'roslib'
-import RosConnection from "./ros_connection";
+import RosConnection from "../components/RosConnection";
 import 'mapbox-gl/dist/mapbox-gl.css';
 import Map, { Layer, Marker, NavigationControl, Source } from 'react-map-gl';
-import { act } from "react-dom/test-utils";
 
 
 

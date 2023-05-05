@@ -1,13 +1,15 @@
-import logo from './logo.svg';
-import './App.css';
-import { Button, Card, Col, Container, Dropdown, Grid, Input, NextUIProvider, Row, Text } from '@nextui-org/react';
-import ROS from 'roslib'
-import { useEffect, useMemo, useRef, useState } from 'react';
+import logo from '../logo.svg';
+import '../App.css';
+import { Button, Card, Container, Dropdown, Grid, NextUIProvider, Text } from '@nextui-org/react';
+import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+
+import TeleOp from '../components/TeleOp';
+import RosConnection from '../components/RosConnection';
+
 function App() {
-  const [message, setMessage] = useState("")
   const [hostname, setHostname] = useState('ws://localhost:9090');
-  const [previewUrl, setPreviewUrl] = useState('logo.svg')
+  const [previewUrl, setPreviewUrl] = useState(logo)
 
   const [previewtopic, setPreviewtopic] = useState('')
   const previewValue = useMemo(
@@ -30,20 +32,19 @@ function App() {
   const imageRef = useRef(null)
 
 
-  function load_ros() {
 
-    rosRef.current = new ROS.Ros({ url: hostname })
 
+
+
+
+  const parsedHostname = useMemo(() => {
+    return hostname.split("//")[1].split(":")[0]
+  }, [hostname]);
+
+
+  function onRosConnected({ url }) {
+    setHostname(url);
     const ros_ = rosRef.current;
-    ros_.on('connection', function () {
-      setMessage("connected...")
-    })
-
-    ros_.on("error", function (error) {
-      setMessage("error...")
-      console.log(error)
-    })
-
     ros_.getTopics((data) => {
       console.log(data);
       const { topics, types } = data;
@@ -54,35 +55,6 @@ function App() {
 
       setAllTopics(topics_);
     });
-    // return ros_
-  }
-
-  useEffect(() => {
-    if (rosRef.current === null) {
-      load_ros()
-    }
-
-    const ros_ = rosRef.current;
-    // ros.connect();
-    return () => {
-      // console.log(url)
-      if (ros_.isConnected)
-        ros_.close()
-    }
-  }, [hostname])
-
-
-  const parsedHostname = useMemo(() => {
-    return hostname.split("//")[1].split(":")[0]
-  }, [hostname]);
-
-
-  function connectFunction() {
-    if (rosRef.current !== null) {
-      rosRef.current.close();
-    }
-
-    load_ros()
   }
 
 
@@ -112,6 +84,8 @@ function App() {
 
 
 
+
+
   return (
     <NextUIProvider>
       <div className="App">
@@ -131,8 +105,7 @@ function App() {
                 </Card.Header>
                 <Card.Divider />
                 <Card.Body>
-                  <Input css={{ mb: "$5" }} label="Host" value={hostname} onChange={function (e) { setHostname(e.target.value) }} />
-                  <Button onPress={connectFunction}>Re-Connect</Button> <Text p>{message}</Text>
+                  <RosConnection ref={rosRef} onRosConnected={onRosConnected} />
                 </Card.Body>
               </Card>
               <Card isHoverable variant='bordered' css={{ mt: "$5" }}>
@@ -172,11 +145,25 @@ function App() {
                     </Dropdown.Menu>
                   </Dropdown>
                   <Button css={{ mb: "$5" }} onPress={previewFunction}>Preview</Button>
-                  {isPreviewing && <Button onPress={() => { setIsPreviewing(false); setPreviewUrl('logo.svg') }}>Stop</Button>}
+                  {isPreviewing && <Button onPress={() => { setIsPreviewing(false); setPreviewUrl(logo) }}>Stop</Button>}
                 </Card.Body>
               </Card>
 
 
+            </Grid>
+
+
+
+            <Grid xs={12} md={3}>
+              <Card>
+                <Card.Header>
+                  <Text>Tele-ops</Text>
+                </Card.Header>
+                <Card.Divider />
+                <Card.Body>
+                  <TeleOp ros={rosRef.current} />
+                </Card.Body>
+              </Card>
             </Grid>
 
             <Grid xs={12} md={6}>
@@ -208,7 +195,7 @@ function App() {
 
                     <Button>Start</Button>
 
-                    <Text p>Status</Text>
+                    <Text>Status</Text>
                     <Button css={{ my: "$5" }}>Stop</Button></div>
 
                 </Card.Body>
@@ -226,6 +213,9 @@ function App() {
       </div>
     </NextUIProvider>
   );
+
+
+
 }
 
 export default App;

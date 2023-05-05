@@ -4,20 +4,20 @@ import { forwardRef, useEffect, useRef, useState } from 'react';
 const RosConnection = forwardRef((props, ref) => {
     const [message, setMessage] = useState("")
     const { onRosConnected } = props;
-    const [hostname, setHostname] = useState('ws://localhost:9090');
+    const [hostname, setHostname] = useState("ws://localhost:9090");
     const ros = ref;
 
 
-    function load_ros() {
+    function load_ros(url) {
 
-        ros.current = new ROS.Ros({ url: hostname })
+        ros.current = new ROS.Ros({ url: url })
 
         console.log(ros)
 
         const ros_ = ros.current;
         ros_.on('connection', function () {
             setMessage("connected...")
-            onRosConnected()
+            onRosConnected({ url: url })
         })
 
         ros_.on("error", function (error) {
@@ -27,35 +27,36 @@ const RosConnection = forwardRef((props, ref) => {
         // return ros_
     }
 
-
     useEffect(() => {
-        // console.log(ros)
-        if (ros.current === undefined) {
-            load_ros()
-        }
+        load_ros(hostname);
 
-        const ros_ = ros.current;
-        // ros.connect();
         return () => {
-            // console.log(url)
-            if (ros_.isConnected)
-                ros_.close()
+            const ros_ = ros.current;
+            if (ros_ !== undefined) {
+                console.log("closing");
+                ros_.close();
+            }
         }
     }, [hostname])
 
 
     function connectFunction() {
+        const url = hostnameRef.current.value;
+        console.log(url);
         if (ros.current !== null) {
+            console.log("in")
             ros.current.close();
         }
-
-        load_ros()
+        load_ros(url)
     }
 
+    const hostnameRef = useRef()
 
 
     return (
-        <Col md align='center'><Input css={{ mb: "$5" }} label="Host" value={hostname} onChange={function (e) { setHostname(e.target.value) }} /> <Button onPress={connectFunction}>Re-Connect</Button> <Text p>{message}</Text></Col>
+        <Col align='center'>
+            <Input ref={hostnameRef} css={{ mb: "$5" }} label="Host" initialValue={hostname} />
+            <Button onPress={connectFunction}>Re-Connect</Button> <Text>{message}</Text></Col>
 
     );
 })

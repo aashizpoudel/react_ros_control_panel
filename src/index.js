@@ -1,9 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import App from './App';
+import Home from './pages/Home';
 import reportWebVitals from './reportWebVitals';
-import GMap from './components/GMap';
+import GMap from './pages/GMap';
 import {
   createHashRouter,
   RouterProvider,
@@ -13,7 +13,7 @@ import "./index.css";
 const router = createHashRouter([
   {
     path: "/",
-    element: <App />,
+    element: <Home />,
   },
   { path: "/map", element: <GMap /> },
   { path: "*", element: <h1>404</h1> }
